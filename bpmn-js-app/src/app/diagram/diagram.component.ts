@@ -23,6 +23,12 @@ import { map, catchError, retry } from 'rxjs/operators';
  */
 import * as BpmnJS from 'bpmn-js/dist/bpmn-modeler.production.min.js';
 
+import * as PropertiesPanelModule from 'bpmn-js-properties-panel';
+
+import * as camundaModdleDescriptor from 'camunda-bpmn-moddle';
+
+import * as PropertiesProviderModule from 'bpmn-js-properties-panel/lib/provider/camunda';
+
 import { importDiagram } from './rx';
 
 import { throwError } from 'rxjs';
@@ -30,13 +36,32 @@ import { throwError } from 'rxjs';
 @Component({
   selector: 'app-diagram',
   template: `
-    <div #ref class="diagram-container"></div>
+    <div>
+      <div #diagram class="diagram-container"></div>
+      <div #panel class="properties-panel-parent" id="js-properties-panel"></div>
+    </div>
   `,
   styles: [
     `
       .diagram-container {
-        height: 100%;
+        height: 500px;
         width: 100%;
+      }
+
+      .properties-panel-parent {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        width: 200px;
+        z-index: 10;
+        border-left: 1px solid #ccc;
+        overflow: auto;
+      }
+
+      .properties-panel-parent .djs-properties-panel {
+        padding-bottom: 70px;
+        min-height:100%;
       }
     `
   ]
@@ -44,14 +69,25 @@ import { throwError } from 'rxjs';
 export class DiagramComponent implements AfterContentInit, OnChanges, OnDestroy {
   private bpmnJS: BpmnJS;
 
-  @ViewChild('ref') private el: ElementRef;
+  @ViewChild('diagram') private diagramEl: ElementRef;
+  @ViewChild('panel') private panelEl: ElementRef;
+
   @Output() private importDone: EventEmitter<any> = new EventEmitter();
 
   @Input() private url: string;
 
   constructor(private http: HttpClient) {
 
-    this.bpmnJS = new BpmnJS();
+    this.bpmnJS = new BpmnJS({
+      additionalModules: [
+        PropertiesPanelModule,
+        PropertiesProviderModule
+      ],
+      // needed if you'd like to maintain camunda:XXX properties in the properties panel
+      moddleExtensions: {
+        camunda: camundaModdleDescriptor
+      }
+    });
 
     this.bpmnJS.on('import.done', ({ error }) => {
       if (!error) {
@@ -61,7 +97,9 @@ export class DiagramComponent implements AfterContentInit, OnChanges, OnDestroy 
   }
 
   ngAfterContentInit(): void {
-    this.bpmnJS.attachTo(this.el.nativeElement);
+    this.bpmnJS.attachTo(this.diagramEl.nativeElement);
+
+    this.bpmnJS.get('propertiesPanel').attachTo(this.panelEl.nativeElement);
   }
 
   ngOnChanges(changes: SimpleChanges) {
